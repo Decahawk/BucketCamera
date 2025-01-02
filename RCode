@@ -1,0 +1,295 @@
+
+#Pre-Steps ====
+# install.packages("ggplot2")
+# install.packages("tidyverse")
+# install.packages("lme4")
+# install.packages("lmerTest")
+# install.packages("emmeans")
+# install.packages("ggsignif")
+
+library(ggplot2)
+l;ibrary(ggsignif)
+library(tidyverse)
+library(lme4)
+library(lmerTest)
+library(emmeans)
+
+setwd("C:/Users/samue/RWork/BucketCamTrapping")
+
+#Data Gathering ====
+
+AllCaptures <- read.csv("Caps.csv")
+CameraTrials <- read.csv("CameraTrials.csv")
+SuccessRate <- read.csv("SuccessRate.csv")
+
+
+#compare MOUSE to Wild Measures ====
+  #Compare Measures of Total Length
+    TotalMeasures <- CameraTrials %>%
+      filter(Method!="Hand") %>%
+      select(Method, Total) %>%
+      drop_na()
+
+    lm(Total ~ Method, data=TotalMeasures) %>%
+      summary()
+
+  #Compare Measures of Tail Length
+    TailMeasures <- CameraTrials %>%
+      filter(Method!="Hand") %>%
+      select(Method, Tail) %>%
+      drop_na()
+    
+    lm(Tail ~ Method, data=TailMeasures) %>%
+      anova()
+
+  #Compare Measures of Body Length
+    BodyMeasures <- CameraTrials %>%
+      filter(Method!="Hand") %>%
+      select(Method, Body) %>%
+      drop_na()
+    
+    lm(Body ~ Method, data=BodyMeasures) %>%
+      anova()
+
+  #Compare Measures of Total Length
+    FootMeasures <- CameraTrials %>%
+      filter(Method!="Hand") %>%
+      select(Method, Hind_Foot) %>%
+      drop_na()
+    
+    lm(Hind_Foot ~ Method, data=FootMeasures) %>%
+      anova()    
+    
+  #Compare Measures of Ear Length
+    EarMeasures <- CameraTrials %>%
+      filter(Method!="Hand") %>%
+      select(Method, Ear) %>%
+      drop_na()
+    
+    lm(Ear ~ Method, data=EarMeasures) %>%
+      anova()    
+    
+    
+    
+    
+#Compare MOUSE Measures to In-hand Measures ====
+  #Comparing Measures of Total Length
+    TotalMeasures <- CameraTrials %>%
+      filter(Method!="Wild") %>%
+      select(Unique_ID, Method, Total) %>% #select only the relevant columns
+      pivot_wider(names_from = Method, values_from = Total) %>% #reorganize data so paired date are on the same row
+      drop_na() %>% #Drop NA values which will drop both members of a pair now 
+      pivot_longer(!Unique_ID, names_to = "Method", values_to = "Total") #reorganize to work for the test
+
+    lmer(Total ~ Method + (1|Unique_ID), data=TotalMeasures) %>%
+      summary()
+
+    
+  #Comparing Measures of Tail Length
+    TailMeasures <- CameraTrials %>%
+      filter(Method!="Wild") %>%
+      select(Unique_ID, Method, Tail) %>%
+      pivot_wider(names_from = Method, values_from = Tail) %>%
+      drop_na() %>%
+      pivot_longer(!Unique_ID, names_to = "Method", values_to = "Tail")
+    
+    lmer(Tail ~ Method + (1|Unique_ID), data=TailMeasures) %>%
+      summary()
+   
+    
+    
+  #Comparing Measures of Body Length
+    BodyMeasures <- CameraTrials %>%
+      filter(Method!="Wild") %>%
+      select(Unique_ID, Method, Body) %>%
+      pivot_wider(names_from = Method, values_from = Body) %>%
+      drop_na() %>%
+      pivot_longer(!Unique_ID, names_to = "Method", values_to = "Body")
+    
+    lmer(Body ~ Method + (1|Unique_ID), data=BodyMeasures) %>%
+      anova()
+    
+  #Comparing Measures of Hind Foot Length
+    FootMeasures <- CameraTrials %>%
+      filter(Method!="Wild") %>%
+      select(Unique_ID, Method, Hind_Foot) %>%
+      pivot_wider(names_from = Method, values_from = Hind_Foot) %>%
+      drop_na() %>%
+      pivot_longer(!Unique_ID, names_to = "Method", values_to = "Hind_Foot")
+    
+    lmer(Hind_Foot ~ Method + (1|Unique_ID), data=FootMeasures) %>%
+      summary()
+    
+  #Comparing Measures of Ear Length
+    EarMeasures <- CameraTrials %>%
+      filter(Method!="Wild") %>%
+      select(Unique_ID, Method, Ear) %>%
+      pivot_wider(names_from = Method, values_from = Ear) %>%
+      drop_na() %>%
+      pivot_longer(!Unique_ID, names_to = "Method", values_to = "Ear")
+    
+    lmer(Ear ~ Method + (1|Unique_ID), data=EarMeasures) %>%
+      summary()
+    
+    SummaryTable <- EarMeasures %>%
+      group_by(Method) %>%
+      summarize_at(vars(Ear), list(mean = mean, sd = sd), na.rm=T)
+    
+        
+#Compare Capture Success Between Trap Types ====
+    mod1 <- lmer(SuccessRate ~ TrapType + (1|Site), data= SuccessRate)
+      #Mixed Model with site as random factor
+    emmeans(mod1, list(pairwise ~ TrapType), adjust="tukey")
+      #Post-hoc, pairwise comparisons with Estimated Marginal Means
+
+    
+    
+#Compare Capture Success between Sites ====        
+    lmer(SuccessRate ~ Site + (1|TrapType), data= SuccessRate) %>%
+      anova()
+    
+#Compare Capture Success Between Season ====
+    lmer(SuccessRate ~ DayOfYear + (1|Site) + (1|TrapType), data=SuccessRate) %>%
+      anova()
+
+    
+    
+    
+#Bar Chart - Success Rate By Trap & Month ====
+Chart <- SuccessRate %>%
+  group_by(TrapType, Month) %>%
+  summarize(MeanSuccess= mean(SuccessRate), SESuccess= (sd(SuccessRate)/sqrt(length(SuccessRate))))
+      
+ggplot(data= Chart, mapping= aes(x= Month, y= MeanSuccess)) +
+  geom_bar(stat='identity') +
+  facet_wrap(~(factor(TrapType, c("Camera","Longworth","Sherman","Pitfall","Tomahawk"))), ncol=3) +
+  theme(axis.text.x= element_text(angle=45, vjust=.75)) +
+  ylab("Mean Success Rate") +
+  geom_errorbar(aes(ymin=MeanSuccess-SESuccess, ymax=MeanSuccess+SESuccess,
+                    width= .2))
+
+
+#Bar Chart - Overall Capture Success By Trap Type ====
+Chart <- SuccessRate %>%
+  group_by(TrapType) %>%
+  summarize(MeanSuccess= mean(SuccessRate), SESuccess= (sd(SuccessRate)/sqrt(length(SuccessRate))))
+
+ggplot(data= Chart, mapping= aes(x= TrapType, y= MeanSuccess)) +
+  geom_bar(stat='identity') +
+  theme(axis.text.x= element_text(angle=45, vjust=.75)) +
+  ylab("Mean Success Rate") +
+  geom_errorbar(aes(ymin=MeanSuccess-SESuccess, ymax=MeanSuccess+SESuccess,
+                    width= .2))
+
+
+#Bar Chart - Proportion of Picture Sets w/ Measurements ====
+Temp <- data.frame(row.names= c("Mouse","Wild"))
+  Temp$Species <- c(1,(373/393))
+
+Chart <- CameraTrials %>%
+  filter(Method != "Hand") %>%
+  group_by(Method) %>%
+  summarize(Total = 1-(sum(is.na(Total)/length(Total))),
+            Tail = 1-(sum(is.na(Tail)/length(Tail))),
+            Body = 1-(sum(is.na(Body)/length(Body))),
+            Foot = 1-(sum(is.na(Hind_Foot)/length(Hind_Foot))),
+            Ear = 1-(sum(is.na(Ear)/length(Ear))))
+  Chart$Species <- Temp$Species
+  Chart <- pivot_longer(Chart, cols= c(Species,Total,Tail,Body,Foot,Ear), names_to= "Variable", values_to= "Proportion")
+  Chart$Variable <- factor(Chart$Variable, levels=c("Species","Total","Tail","Body","Foot","Ear"))  
+
+
+ggplot(data= Chart, mapping= aes(x= Variable, y= Proportion, fill= Method)) +
+  geom_bar(stat='identity', position= "Dodge") +
+  scale_fill_manual(values= c("gray40","gray69")) +
+  ylab("Proportion of Picture Sets")
+
+
+
+
+#Bar Chart - MOUSE Vs. Wild Measures ====
+
+Chart <- CameraTrials %>%
+  filter(Method!="Hand") %>%
+  group_by(Method)%>%
+  summarize(Total = mean(Total, na.rm=T),
+            Tail = mean(Tail, na.rm=T),
+            Body = mean(Body, na.rm=T),
+            Foot = mean(Hind_Foot, na.rm=T),
+            Ear = mean(Ear, na.rm=T)) %>%
+  pivot_longer(cols= c(Total,Tail,Body,Foot,Ear), names_to= "Variable", values_to= "Length")
+
+
+SEs <- CameraTrials %>%
+  filter(Method!="Hand") %>%
+  group_by(Method) %>%
+  summarize(TotalSE= (sd(Total, na.rm=T)/sqrt(length(Total))),
+            TailSE= (sd(Tail, na.rm=T)/sqrt(length(Tail))),
+            BodySE= (sd(Body, na.rm=T)/sqrt(length(Body))),
+            FootSE= (sd(Hind_Foot, na.rm=T)/sqrt(length(Hind_Foot))),
+            EarSE= (sd(Ear, na.rm=T)/sqrt(length(Ear)))) %>%
+  pivot_longer(cols= c(TotalSE,TailSE,BodySE,FootSE,EarSE), names_to= "Variable", values_to= "SE")
+
+Chart$SE <- SEs$SE
+Chart$Variable <- factor(Chart$Variable, levels=c("Total","Tail","Body","Foot","Ear"))  
+
+ggplot(data= Chart, mapping= aes(x= Variable, y= Length, fill=Method)) +
+  geom_bar(stat='identity', position= "dodge") +
+  scale_fill_manual(values= c("gray40","gray69")) +
+  ylab("Length (mm)") +
+  geom_errorbar(aes(ymin=Length-SE, ymax=Length+SE, 
+                    width= .2),
+                    position= position_dodge(1))
+
+
+
+
+#Bar Chart - MOUSE Vs. In-Hand Measures ====
+Chart <- CameraTrials %>%
+  filter(Method!="Wild") %>%
+  group_by(Method)%>%
+  summarize(Total = mean(Total, na.rm=T),
+            Tail = mean(Tail, na.rm=T),
+            Body = mean(Body, na.rm=T),
+            Foot = mean(Hind_Foot, na.rm=T),
+            Ear = mean(Ear, na.rm=T)) %>%
+  pivot_longer(cols= c(Total,Tail,Body,Foot,Ear), names_to= "Variable", values_to= "Length")
+
+
+SEs <- CameraTrials %>%
+  filter(Method!="Wild") %>%
+  group_by(Method) %>%
+  summarize(TotalSE= (sd(Total, na.rm=T)/sqrt(length(Total))),
+            TailSE= (sd(Tail, na.rm=T)/sqrt(length(Tail))),
+            BodySE= (sd(Body, na.rm=T)/sqrt(length(Body))),
+            FootSE= (sd(Hind_Foot, na.rm=T)/sqrt(length(Hind_Foot))),
+            EarSE= (sd(Ear, na.rm=T)/sqrt(length(Ear)))) %>%
+  pivot_longer(cols= c(TotalSE,TailSE,BodySE,FootSE,EarSE), names_to= "Variable", values_to= "SE")
+
+Chart$SE <- SEs$SE
+Chart$Variable <- factor(Chart$Variable, levels=c("Total","Tail","Body","Foot","Ear"))  
+Chart$Method <- factor(Chart$Method, levels=c("Mouse","Hand"))  
+
+ggplot(data= Chart, mapping= aes(x= Variable, y= Length, fill=Method)) +
+  geom_bar(stat='identity', position= "dodge") +
+  scale_fill_manual(values= c("gray40","gray69")) +
+  ylab("Length (mm)") +
+  geom_errorbar(aes(ymin=Length-SE, ymax=Length+SE, 
+                    width= .2),
+                position= position_dodge(1))+
+  geom_signif(
+    y_position = c(85, 97, 26, 20), 
+    xmin = c(1.8, 2.8, 3.8, 4.8), 
+    xmax = c(2.2, 3.2, 4.2, 5.2),
+    annotation = c("***", "*","***","***"), 
+    tip_length = .02)
+
+
+
+
+
+
+
+
+
+    
